@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { shortKey } from "../lib/phantom";
+import Splash from "./splash";
 
 export default function Home() {
   const [bets, setBets] = useState<any[] | null>(null);
@@ -10,6 +11,7 @@ export default function Home() {
   }, []);
   return (
     <div className="wrap">
+      <Splash />
       <div className="brand">
         <h1><Link href="/" style={{ color: "inherit", textDecoration: "none" }}>FAIR<b>PLAY</b></Link></h1>
         <div className="net"><Link href="/xray" style={{ color: "var(--dim)", textDecoration: "none" }}>POST A CHALLENGE</Link> · OPEN BETS</div>

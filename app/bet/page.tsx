@@ -41,7 +41,7 @@ function BetInner() {
   return (
     <div className="wrap">
       <div className="brand">
-        <h1>FAIR<b>LINE</b></h1>
+        <h1>FAIR<b>PLAY</b></h1>
         <div className="net">P2P CHALLENGE ·{" "}
           <a href="#" onClick={(e) => { e.preventDefault(); connectPhantom().then(setWallet); }}
              style={{ color: wallet ? "var(--won)" : "var(--dim)", textDecoration: "none" }}>

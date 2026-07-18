@@ -155,16 +155,16 @@ export default function Page() {
       {splash && (
         <div className="splash" onClick={() => setSplash(false)}>
           <div className="wordmark">
-            {"FAIRLINE".split("").map((c, i) => (
+            {"FAIRPLAY".split("").map((c, i) => (
               <span key={i} className="l" style={{ animationDelay: `${i * 0.05}s`, color: i > 3 ? "var(--margin)" : undefined }}>{c}</span>
             ))}
             <span className="sweep" />
-            <span className="tag">MARGIN X-RAY · TxLINE · SOLANA</span>
+            <span className="tag">P2P FAIR ODDS · TxODDS · SOLANA</span>
           </div>
         </div>
       )}
       <div className="brand">
-        <h1><a href="/" style={{ color: "inherit", textDecoration: "none" }}>FAIR<b>LINE</b></a></h1>
+        <h1><a href="/" style={{ color: "inherit", textDecoration: "none" }}>FAIR<b>PLAY</b></a></h1>
         <div className="net">
           <a href="/" style={{ color: "var(--dim)", textDecoration: "none" }}>OPEN BETS</a>{" · "}{live.configured ? `TxLINE LIVE · ${live.network?.toUpperCase()}` : "DEMO"}
           {" · "}
