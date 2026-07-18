@@ -11,7 +11,7 @@ export default function Home() {
   return (
     <div className="wrap">
       <div className="brand">
-        <h1><Link href="/" style={{ color: "inherit", textDecoration: "none" }}>FAIR<b>LINE</b></Link></h1>
+        <h1><Link href="/" style={{ color: "inherit", textDecoration: "none" }}>FAIR<b>PLAY</b></Link></h1>
         <div className="net"><Link href="/xray" style={{ color: "var(--dim)", textDecoration: "none" }}>POST A CHALLENGE</Link> · OPEN BETS</div>
       </div>
       <p className="eyebrow">Open bets · TxODDS fair prices · take either side</p>
