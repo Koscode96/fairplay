@@ -63,7 +63,7 @@ export default function Home() {
                 <div className="mkrow" style={{ justifyContent: "space-between" }}>
                   <span className="mklabel" style={{ width: "auto" }}>FAIR {Number(b.fairPrice).toFixed(2)} · BACKED £{b.stake}</span>
                   <Link href={`/bet?d=${b.d}`} className="mkpx" style={{ textDecoration: "none" }}>
-                    {b.closed ? "CLOSED · IN PLAY" : b.remaining <= 0 ? "FULLY MATCHED" : `TAKE FROM £1 · £${b.remaining} OPEN →`}
+                    {b.closed ? "CLOSED · CHECK RESULT →" : b.remaining <= 0 ? "FULLY MATCHED" : `TAKE FROM £1 · £${b.remaining} OPEN →`}
                   </Link>
                 </div>
                 <div className="bar" style={{ height: 8, marginTop: 7 }}>
