@@ -39,7 +39,7 @@ function matchLiveLeg(leg: { homeTeam: string; awayTeam: string; market: string;
   const ms = ctx.markets[fx.fixtureId] ?? [];
   const m = ms.find((x) => x.marketId === marketId && (x.line == null || leg.line == null || x.line === leg.line));
   if (!m) return null;
-  return { fixture: { id: String(fx.fixtureId), home: fx.home, away: fx.away }, fairPrice: m.fairPrice, proofRef: `tx:${m.ts}`, line: m.line };
+  return { fixture: { id: String(fx.fixtureId), home: fx.home, away: fx.away, ko: (fx as any).startTime ?? null }, fairPrice: m.fairPrice, proofRef: `tx:${m.ts}`, line: m.line };
 }
 
 function matchLeg(leg: {
@@ -137,6 +137,7 @@ export async function POST(req: NextRequest) {
       fixtureId: m?.fixture.id ?? null,
       fairPrice: m?.fairPrice ?? null,
       proofRef: m?.proofRef ?? null,
+      ko: (m?.fixture as any)?.ko ?? null,
     };
   });
 

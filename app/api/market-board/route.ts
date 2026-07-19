@@ -24,7 +24,11 @@ export async function GET() {
         over: ms.find((m) => m.marketId === "over_goals" && m.line === l)?.fairPrice ?? null,
         under: ms.find((m) => m.marketId === "under_goals" && m.line === l)?.fairPrice ?? null,
       })),
-      handicap: ahLines.map((l) => ({ line: l, home: px("home_handicap", l as number)?.fairPrice ?? null })),
+      handicap: ahLines.map((l) => ({
+        line: l,
+        home: px("home_handicap", l as number)?.fairPrice ?? null,
+        away: ms.find((m) => m.marketId === "away_handicap" && m.line === -(l as number))?.fairPrice ?? null,
+      })),
     };
   });
   return NextResponse.json({ live: true, fixtures });

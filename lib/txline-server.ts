@@ -82,6 +82,11 @@ function parseOdds(fixtureId: number, data: any[]): LiveMarket[] {
       push("over_goals", "over", 0); push("under_goals", "under", 1);
     } else if (o.SuperOddsType === "ASIANHANDICAP_PARTICIPANT_GOALS") {
       push("home_handicap", "home", 0);
+      if (prices[1]) raw.push({
+        fixtureId, marketId: "away_handicap", selection: "away",
+        line: line !== undefined ? -line : undefined,
+        fairPrice: prices[1] / 1000, ts: o.Ts, messageId: o.MessageId,
+      });
     }
   }
   return raw;

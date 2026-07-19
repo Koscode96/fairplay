@@ -154,6 +154,18 @@ export const MARKETS: Record<string, MarketDef> = {
         l
       ),
   },
+  away_handicap: {
+    id: "away_handicap",
+    needsLine: true,
+    label: (l) => `Away ${l! > 0 ? "+" : ""}${l}`,
+    predicate: (l = 0.5) => ({
+      kind: "twoStatSubtract",
+      a: { stat: "goals", side: "away", period: "FT" },
+      b: { stat: "goals", side: "home", period: "FT" },
+      op: "gt",
+      value: -l!,
+    }),
+  },
   home_handicap: {
     id: "home_handicap",
     needsLine: true,

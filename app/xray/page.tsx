@@ -137,6 +137,7 @@ export default function Page() {
         fairPrice: l.fairPrice ?? 0,
         proofRef: l.proofRef ?? undefined,
         matched: l.matched,
+        ko: l.ko ?? null,
       }));
       if (!legs.length) { setScanMsg("No legs found on that image."); return; }
       setSlip(legs);
@@ -364,10 +365,11 @@ export default function Page() {
                     {g.under && <button className="mkpx" onClick={() => addLeg(f.fixtureId, "under_goals", g.line, `${f.home} v ${f.away} · Under ${g.line} goals`, g.under)}><small>U</small>{g.under.toFixed(2)}</button>}
                   </div>
                 ))}
-                {f.handicap.filter((h: any) => h.home).slice(0, 3).map((h: any) => (
+                {f.handicap.filter((h: any) => h.home || h.away).slice(0, 4).map((h: any) => (
                   <div className="mkrow" key={`h${h.line}`}>
                     <span className="mklabel">AH {h.line}</span>
-                    <button className="mkpx" onClick={() => addLeg(f.fixtureId, "home_handicap", h.line, `${f.home} ${h.line >= 0 ? "+" : ""}${h.line} v ${f.away}`, h.home)}><small>1</small>{h.home.toFixed(2)}</button>
+                    {h.home && <button className="mkpx" onClick={() => addLeg(f.fixtureId, "home_handicap", h.line, `${f.home} ${h.line >= 0 ? "+" : ""}${h.line} v ${f.away}`, h.home)}><small>1</small>{h.home.toFixed(2)}</button>}
+                    {h.away && <button className="mkpx" onClick={() => addLeg(f.fixtureId, "away_handicap", -h.line, `${f.away} ${-h.line >= 0 ? "+" : ""}${-h.line} v ${f.home}`, h.away)}><small>2</small>{h.away.toFixed(2)}</button>}
                   </div>
                 ))}
               </div>
