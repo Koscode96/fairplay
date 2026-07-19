@@ -26,8 +26,17 @@ export default function Home() {
           <div className="mkfix" key={b.d.slice(0, 24)}>
             <div className="mkhead"><div>{b.label}</div><span>{shortKey(b.creator)}</span></div>
             <div className="mkrow" style={{ justifyContent: "space-between" }}>
-              <span className="mklabel" style={{ width: "auto" }}>FAIR {Number(b.fairPrice).toFixed(2)} · £{b.stake}</span>
-              <Link href={`/bet?d=${b.d}`} className="mkpx" style={{ textDecoration: "none" }}>TAKE THE OTHER SIDE →</Link>
+              <span className="mklabel" style={{ width: "auto" }}>FAIR {Number(b.fairPrice).toFixed(2)} · BACKED £{b.stake}</span>
+              <Link href={`/bet?d=${b.d}`} className="mkpx" style={{ textDecoration: "none" }}>
+                {b.remaining <= 0 ? "FULLY MATCHED" : `TAKE FROM £1 · £${b.remaining} OPEN →`}
+              </Link>
+            </div>
+            <div className="bar" style={{ height: 8, marginTop: 7 }}>
+              <div className="fair" style={{ width: `${b.totalLiability ? Math.min(100, (b.matched / b.totalLiability) * 100) : 0}%`, background: "var(--won)" }} />
+            </div>
+            <div className="sub" style={{ display: "flex", justifyContent: "space-between", fontFamily: "var(--mono)", fontSize: 10, color: "var(--dim)", marginTop: 5 }}>
+              <span>£{b.matched ?? 0} matched of £{b.totalLiability} liability</span>
+              <span>{b.fills?.length ?? 0} taker{(b.fills?.length ?? 0) === 1 ? "" : "s"}</span>
             </div>
           </div>
         ))}

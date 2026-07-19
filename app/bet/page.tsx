@@ -5,6 +5,10 @@ import { decodeBet, BetPayload } from "../../lib/bet-codec";
 import { connectPhantom, signBetCommitment, shortKey, anchorOnDevnet } from "../../lib/phantom";
 
 function BetInner() {
+  const getWallet = () => {
+    const w = (window as any).phantom?.solana ?? (window as any).solana;
+    return w?.publicKey?.toBase58?.() ?? "unknown";
+  };
   const params = useSearchParams();
   const [bet, setBet] = useState<BetPayload | null>(null);
   const [bad, setBad] = useState(false);
@@ -13,6 +17,9 @@ function BetInner() {
   const [anchor, setAnchor] = useState<{ sig?: string; error?: string; busy?: boolean } | null>(null);
   const [result, setResult] = useState<any>(null);
   const [checking, setChecking] = useState(false);
+  const [feedBet, setFeedBet] = useState<any>(null);
+  const [fillAmt, setFillAmt] = useState<number>(10);
+  const [myFill, setMyFill] = useState<number | null>(null);
 
   useEffect(() => {
     const d = params.get("d");
@@ -20,6 +27,9 @@ function BetInner() {
     const b = decodeBet(d);
     if (!b) { setBad(true); return; }
     setBet(b);
+    fetch(`/api/bets?d=${encodeURIComponent(d)}`).then((r) => r.json())
+      .then((res) => { if (res.bet) { setFeedBet(res.bet); setFillAmt(Math.min(10, res.bet.remaining)); } })
+      .catch(() => {});
   }, [params]);
 
   const checkSettlement = async () => {
@@ -55,20 +65,42 @@ function BetInner() {
         <div className="row"><span className="k">Market</span><span className="v">{bet.label}</span></div>
         <div className="row"><span className="k">Fair price (TxLINE)</span><span className="v">{bet.fairPrice.toFixed(2)}</span></div>
         <div className="row"><span className="k">Challenger backs</span><span className="v">YES · {shortKey(bet.creator)}</span></div>
-        <div className="row"><span className="k">You take</span><span className="v">The other side</span></div>
+        <div className="row"><span className="k">You take</span><span className="v">The other side · from £1</span></div>
+        {feedBet && (
+          <div className="row"><span className="k">Liquidity</span>
+            <span className="v">£{feedBet.matched} / £{feedBet.totalLiability} matched · £{feedBet.remaining} open</span></div>
+        )}
         <div className="row"><span className="k">Stake each</span><span className="v">£{bet.stake.toFixed(2)}</span></div>
         <div className="row"><span className="k">Winner takes</span><span className="v">£{(bet.stake + Number(payout)).toFixed(2)}</span></div>
         <div className="row"><span className="k">Settlement</span><span className="v" style={{ fontSize: 11 }}>TxLINE verified · automatic</span></div>
         <div className="row"><span className="k">Status</span>
-          <span className={`pill ${acceptSig ? "won" : "open"}`}>{acceptSig ? "ACCEPTED · SIGNED" : "AWAITING YOUR SIGNATURE"}</span></div>
+          <span className={`pill ${acceptSig ? "won" : "open"}`}>{acceptSig ? `MATCHED £${(myFill ?? 0).toFixed(0)} · SIGNED` : "OPEN"}</span></div>
         {!acceptSig && (
-          <button className="go" style={{ marginTop: 12 }} onClick={async () => {
-            if (!wallet) { const w = await connectPhantom(); setWallet(w); if (!w) return; }
-            const sig = await signBetCommitment({ accept: true, of: bet.creatorSig.slice(0, 32), market: bet.marketId, fixture: bet.fixtureId, price: bet.fairPrice, ts: Date.now() });
-            if (sig) setAcceptSig(sig);
-          }}>
-            {wallet ? "ACCEPT & SIGN WITH PHANTOM" : "CONNECT PHANTOM TO ACCEPT"}
-          </button>
+          <>
+            <div className="totrow" style={{ marginTop: 6 }}>
+              <label>Your stake (£){feedBet ? ` · max ${feedBet.remaining}` : ""}</label>
+              <input className="num" type="number" min={1} step={1} value={fillAmt}
+                onChange={(e) => setFillAmt(Math.max(1, Math.min(feedBet?.remaining ?? 999, +e.target.value || 1)))} />
+            </div>
+            <p className="foot" style={{ textAlign: "left", margin: "6px 2px 0" }}>
+              Risk £{fillAmt.toFixed(2)} to win £{(fillAmt / (bet.fairPrice - 1)).toFixed(2)}
+              {feedBet?.totalLiability ? ` · ${((fillAmt / feedBet.totalLiability) * 100).toFixed(0)}% of the bet` : ""}
+            </p>
+            <button className="go" style={{ marginTop: 12 }} onClick={async () => {
+              if (!wallet) { const w = await connectPhantom(); setWallet(w); if (!w) return; }
+              const amt = fillAmt;
+              const sig = await signBetCommitment({ accept: true, of: bet.creatorSig.slice(0, 32), market: bet.marketId, fixture: bet.fixtureId, price: bet.fairPrice, amount: amt, ts: Date.now() });
+              if (sig) {
+                setAcceptSig(sig); setMyFill(amt);
+                const w2 = getWallet();
+                fetch("/api/bets", { method: "POST", headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ action: "fill", d: params.get("d"), taker: w2, amount: amt, sig }) })
+                  .then((r) => r.json()).then((res) => { if (res.bet) setFeedBet(res.bet); }).catch(() => {});
+              }
+            }}>
+              {wallet ? `MATCH £${fillAmt.toFixed(0)} & SIGN` : "CONNECT PHANTOM TO MATCH"}
+            </button>
+          </>
         )}
         {acceptSig && !anchor?.sig && (
           <button className="cta" style={{ marginTop: 10 }} disabled={anchor?.busy}
@@ -89,6 +121,17 @@ function BetInner() {
         )}
       </div>
 
+      {feedBet?.fills?.length > 0 && (
+        <div className="card" style={{ marginTop: 12 }}>
+          <p className="eyebrow" style={{ margin: "0 0 8px" }}>Takers</p>
+          {feedBet.fills.map((f: any, i: number) => (
+            <div className="row" key={i} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", fontSize: 12, fontFamily: "var(--mono)" }}>
+              <span style={{ color: "var(--dim)" }}>{shortKey(f.taker)}</span>
+              <span>£{f.amount.toFixed(2)} · wins £{(f.amount / (bet.fairPrice - 1)).toFixed(2)}</span>
+            </div>
+          ))}
+        </div>
+      )}
       {acceptSig && (
         <>
           <p className="eyebrow" style={{ marginTop: 20 }}>Settlement · live from TxLINE</p>
