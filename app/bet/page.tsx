@@ -36,8 +36,20 @@ function BetInner() {
     if (!bet) return;
     setChecking(true);
     try {
-      const r = await fetch(`/api/settle-check?fixtureId=${bet.fixtureId}&marketId=${bet.marketId}${bet.line != null ? `&line=${bet.line}` : ""}`);
-      setResult(await r.json());
+      if (bet.legs?.length) {
+        const outcomes = await Promise.all(bet.legs.map((l: any) =>
+          fetch(`/api/settle-check?fixtureId=${l.fixtureId}&marketId=${l.marketId}${l.line != null ? `&line=${l.line}` : ""}`).then((r) => r.json())
+        ));
+        const legResults = outcomes.map((o: any, i: number) => ({ label: bet.legs![i].label, outcome: o.outcome }));
+        const live = outcomes.filter((o: any) => o.outcome !== "void");
+        const combined = live.some((o: any) => o.outcome === "lost") ? "lost"
+          : live.some((o: any) => o.outcome === "pending") ? "pending"
+          : live.length === 0 ? "void" : "won";
+        setResult({ outcome: combined, score: outcomes[0]?.score, legs: legResults, finalised: outcomes.every((o: any) => o.finalised !== false) });
+      } else {
+        const r = await fetch(`/api/settle-check?fixtureId=${bet.fixtureId}&marketId=${bet.marketId}${bet.line != null ? `&line=${bet.line}` : ""}`);
+        setResult(await r.json());
+      }
     } catch { setResult({ outcome: "pending", note: "network error" }); }
     setChecking(false);
   };
@@ -62,7 +74,18 @@ function BetInner() {
 
       <p className="eyebrow">Open bet · fair odds</p>
       <div className="card chal">
-        <div className="row"><span className="k">Market</span><span className="v">{bet.label}</span></div>
+        {bet.legs?.length ? (
+          <>
+            <div className="row"><span className="k">Market</span><span className="v">Combo · {bet.legs.length} legs</span></div>
+            {bet.legs.map((l: any, i: number) => (
+              <div className="row" key={i} style={{ fontSize: 12 }}>
+                <span className="k" style={{ paddingLeft: 10 }}>· {l.label}</span><span className="v">{Number(l.fairPrice).toFixed(2)}</span>
+              </div>
+            ))}
+          </>
+        ) : (
+          <div className="row"><span className="k">Market</span><span className="v">{bet.label}</span></div>
+        )}
         <div className="row"><span className="k">Fair price</span><span className="v">{bet.fairPrice.toFixed(2)}</span></div>
         <div className="row"><span className="k">Challenger backs</span><span className="v">YES · {shortKey(bet.creator)}</span></div>
         <div className="row"><span className="k">You take</span><span className="v">The other side · from £1</span></div>
@@ -146,6 +169,9 @@ function BetInner() {
               <div className="proofbox" style={{ marginTop: 12 }}>
                 <b>OUTCOME: {String(result.outcome).toUpperCase()}{result.finalised === false && result.outcome === "pending" ? " (match not finalised)" : ""}</b><br />
                 {result.score && <>score : {result.score.home}-{result.score.away}<br /></>}
+                {result.legs?.map((l: any, i: number) => (
+                  <span key={i}>{l.label.slice(0, 30)} : {String(l.outcome).toUpperCase()}<br /></span>
+                ))}
                 
                 {result.outcome !== "pending" && (
                   <>ruling : challenger {won ? "WINS" : result.outcome === "void" ? "· VOID, stakes returned" : "LOSES · you win"}</>

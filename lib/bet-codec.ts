@@ -1,9 +1,11 @@
 /** The bet lives in the link: base64url-encoded payload, no database. */
+export interface ComboLeg { label: string; marketId: string; line?: number; fairPrice: number; fixtureId: string }
 export interface BetPayload {
   v: 1;
   fixtureId: string;
   marketId: string;
   line?: number;
+  legs?: ComboLeg[];   // present when kind is a combo
   label: string;
   fairPrice: number;
   stake: number;

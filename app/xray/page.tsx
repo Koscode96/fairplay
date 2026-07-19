@@ -5,6 +5,7 @@ import { settle } from "../../lib/markets";
 import { settledStats, eventTimeline, txStatus } from "../../lib/txline";
 import { connectPhantom, signBetCommitment, shortKey, anchorOnDevnet } from "../../lib/phantom";
 import { encodeBet } from "../../lib/bet-codec";
+import { flag } from "../../lib/flags";
 
 interface SlipLeg extends Leg {
   sub: string;
@@ -73,6 +74,8 @@ export default function Page() {
     [matchedLegs, accaPrice, stake]
   );
   const [chosen, setChosen] = useState(0);
+  const [postMode, setPostMode] = useState<"combo" | "single">("combo");
+  const comboPrice = Number(matchedLegs.reduce((a, l) => a * l.fairPrice, 1).toFixed(2));
   const worst = matchedLegs.length ? matchedLegs[Math.min(chosen, matchedLegs.length - 1)] : null;
   const settled = "won";
   const events = [
@@ -227,8 +230,16 @@ export default function Page() {
 
       {step === 2 && worst && (
         <section>
-          <p className="eyebrow">Choose your market, set your stake, sign to post</p>
+          <p className="eyebrow">Set your terms, sign to post</p>
           {matchedLegs.length > 1 && (
+            <div className="mkrow" style={{ marginBottom: 10 }}>
+              <button className="mkpx" style={postMode === "combo" ? { borderColor: "var(--margin)", color: "var(--margin)" } : {}}
+                onClick={() => setPostMode("combo")}>COMBO · {matchedLegs.length} LEGS @ {comboPrice.toFixed(2)}</button>
+              <button className="mkpx" style={postMode === "single" ? { borderColor: "var(--margin)", color: "var(--margin)" } : {}}
+                onClick={() => setPostMode("single")}>SINGLES · PICK ONE</button>
+            </div>
+          )}
+          {postMode === "single" && matchedLegs.length > 1 && (
             <div className="mkrow" style={{ marginBottom: 10, flexWrap: "wrap" }}>
               {matchedLegs.map((l, i) => (
                 <button key={i} className="mkpx" style={i === Math.min(chosen, matchedLegs.length - 1) ? { borderColor: "var(--margin)", color: "var(--margin)" } : {}}
@@ -238,14 +249,15 @@ export default function Page() {
           )}
           <div className="card chal">
             <div className="row"><span className="k">Market</span><span className="v">{worst.label.split("·").pop()?.trim()}</span></div>
-            <div className="row"><span className="k">Fair price</span><span className="v">{worst.fairPrice.toFixed(2)}</span></div>
+            <div className="row"><span className="k">{postMode === "combo" && matchedLegs.length > 1 ? "Combined price · legs multiplied" : "Fair price"}</span>
+              <span className="v">{(postMode === "combo" && matchedLegs.length > 1 ? comboPrice : worst.fairPrice).toFixed(2)}</span></div>
                         <div className="totrow" style={{ padding: "9px 0", borderBottom: "1px solid var(--line)" }}>
               <label>Your stake (£)</label>
               <input className="num" type="number" min={1} step={1} value={stake}
                 onChange={(e) => setStake(Math.max(1, +e.target.value || 1))} style={{ width: 90 }} />
             </div>
-            <div className="row"><span className="k">You win</span><span className="v">£{(stake * (worst.fairPrice - 1)).toFixed(2)}</span></div>
-            <div className="row"><span className="k">Takers fill</span><span className="v">from £1 · up to £{(stake * (worst.fairPrice - 1)).toFixed(2)}</span></div>
+            <div className="row"><span className="k">You win</span><span className="v">£{(stake * ((postMode === "combo" && matchedLegs.length > 1 ? comboPrice : worst.fairPrice) - 1)).toFixed(2)}</span></div>
+            <div className="row"><span className="k">Takers fill</span><span className="v">from £1 · up to £{(stake * ((postMode === "combo" && matchedLegs.length > 1 ? comboPrice : worst.fairPrice) - 1)).toFixed(2)}</span></div>
             <div className="row"><span className="k">Settlement</span><span className="v" style={{ fontSize: 11 }}>Automatic · official result</span></div>
             <div className="row"><span className="k">Status</span>
               <span className={`pill ${betSig ? "won" : "open"}`}>{betSig ? "LIVE ON FAIRPLAY · AWAITING TAKER" : "AWAITING YOUR SIGNATURE"}</span></div>
@@ -253,18 +265,22 @@ export default function Page() {
               <button className="go" style={{ marginTop: 12 }} onClick={async () => {
                 let w = wallet;
                 if (!w) { w = await connectPhantom(); setWallet(w); if (!w) return; }
-                const terms = { app: "fairplay", v: 1, market: worst.marketId, fixture: worst.fixtureId, price: worst.fairPrice, stake, side: "for", ts: Date.now() };
+                const isCombo = postMode === "combo" && matchedLegs.length > 1;
+                const effPrice = isCombo ? comboPrice : worst.fairPrice;
+                const effLabel = isCombo ? `Combo · ${matchedLegs.map((l) => l.label).join(" + ")}` : worst.label;
+                const terms = { app: "fairplay", v: 1, market: isCombo ? "combo" : worst.marketId, fixture: worst.fixtureId, price: effPrice, stake, side: "for", ts: Date.now() };
                 const sig = await signBetCommitment(terms);
                 if (sig && w) {
                   setBetSig(sig);
                   const d = encodeBet({
-                    v: 1, fixtureId: worst.fixtureId, marketId: worst.marketId,
-                    line: (worst as any).line, label: worst.label, fairPrice: worst.fairPrice,
+                    v: 1, fixtureId: worst.fixtureId, marketId: isCombo ? "combo" : worst.marketId,
+                    line: (worst as any).line, label: effLabel, fairPrice: effPrice,
+                    legs: isCombo ? matchedLegs.map((l) => ({ label: l.label, marketId: l.marketId, line: (l as any).line, fairPrice: l.fairPrice, fixtureId: l.fixtureId })) : undefined,
                     stake, creator: w, creatorSig: sig, side: "for", ts: terms.ts,
                   });
                   setShareLink(`${window.location.origin}/bet?d=${d}`);
                   fetch("/api/bets", { method: "POST", headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ d, label: worst.label, fairPrice: worst.fairPrice, stake, creator: w, ko: (worst as any).ko ?? null }) }).catch(() => {});
+                    body: JSON.stringify({ d, label: effLabel, fairPrice: effPrice, stake, creator: w, ko: (worst as any).ko ?? null }) }).catch(() => {});
                 }
               }}>
                 {wallet ? "SIGN CHALLENGE WITH PHANTOM" : "CONNECT PHANTOM TO SIGN"}
@@ -354,9 +370,9 @@ export default function Page() {
                 <div className="mkhead"><div>{f.home} v {f.away}</div><span>KO {ko}</span></div>
                 <div className="mkrow">
                   <span className="mklabel">RESULT</span>
-                  {f.oneX2.home && <button className="mkpx" onClick={() => addLeg(f.fixtureId, "home_win", undefined, `${f.home} to beat ${f.away}`, f.oneX2.home)}><small>1</small>{f.oneX2.home.toFixed(2)}</button>}
+                  {f.oneX2.home && <button className="mkpx" onClick={() => addLeg(f.fixtureId, "home_win", undefined, `${f.home} to beat ${f.away}`, f.oneX2.home)}><small>{flag(f.home)}</small>{f.oneX2.home.toFixed(2)}</button>}
                   {f.oneX2.draw && <button className="mkpx" onClick={() => addLeg(f.fixtureId, "draw", undefined, `${f.home} v ${f.away} · Draw`, f.oneX2.draw)}><small>X</small>{f.oneX2.draw.toFixed(2)}</button>}
-                  {f.oneX2.away && <button className="mkpx" onClick={() => addLeg(f.fixtureId, "away_win", undefined, `${f.away} to beat ${f.home}`, f.oneX2.away)}><small>2</small>{f.oneX2.away.toFixed(2)}</button>}
+                  {f.oneX2.away && <button className="mkpx" onClick={() => addLeg(f.fixtureId, "away_win", undefined, `${f.away} to beat ${f.home}`, f.oneX2.away)}><small>{flag(f.away)}</small>{f.oneX2.away.toFixed(2)}</button>}
                 </div>
                 {f.goals.filter((g: any) => g.over || g.under).slice(0, 4).map((g: any) => (
                   <div className="mkrow" key={`g${g.line}`}>
@@ -368,8 +384,8 @@ export default function Page() {
                 {f.handicap.filter((h: any) => h.home || h.away).slice(0, 4).map((h: any) => (
                   <div className="mkrow" key={`h${h.line}`}>
                     <span className="mklabel">AH {h.line}</span>
-                    {h.home && <button className="mkpx" onClick={() => addLeg(f.fixtureId, "home_handicap", h.line, `${f.home} ${h.line >= 0 ? "+" : ""}${h.line} v ${f.away}`, h.home)}><small>1</small>{h.home.toFixed(2)}</button>}
-                    {h.away && <button className="mkpx" onClick={() => addLeg(f.fixtureId, "away_handicap", -h.line, `${f.away} ${-h.line >= 0 ? "+" : ""}${-h.line} v ${f.home}`, h.away)}><small>2</small>{h.away.toFixed(2)}</button>}
+                    {h.home && <button className="mkpx" onClick={() => addLeg(f.fixtureId, "home_handicap", h.line, `${f.home} ${h.line >= 0 ? "+" : ""}${h.line} v ${f.away}`, h.home)}><small>{flag(f.home)}</small>{h.home.toFixed(2)}</button>}
+                    {h.away && <button className="mkpx" onClick={() => addLeg(f.fixtureId, "away_handicap", -h.line, `${f.away} ${-h.line >= 0 ? "+" : ""}${-h.line} v ${f.home}`, h.away)}><small>{flag(f.away)}</small>{h.away.toFixed(2)}</button>}
                   </div>
                 ))}
               </div>
