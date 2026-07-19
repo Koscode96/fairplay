@@ -138,3 +138,6 @@
   .hero h2{font-weight:800}
   .tile-t{font-family:var(--sans);font-weight:800;letter-spacing:.08em}
   @media (prefers-reduced-motion: reduce){ .brand h1{animation:none} }
+  input.num{width:96px !important;min-width:96px !important;flex:none !important;text-align:right;font-size:14px;padding:8px 10px}
+  input.num::-webkit-outer-spin-button,input.num::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  input.num[type=number]{-moz-appearance:textfield;appearance:textfield}
