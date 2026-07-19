@@ -146,3 +146,12 @@ export async function liveBoard() {
   for (const f of upcoming) markets[f.fixtureId] = await liveMarkets(f.fixtureId);
   return { fixtures, upcoming, markets };
 }
+
+/** Read a fixture's market book straight from Redis (no feed fetch). */
+export async function cachedMarkets(fixtureId: number): Promise<LiveMarket[]> {
+  if (!mredis) return [];
+  try {
+    const h = await mredis.hgetall<Record<string, LiveMarket>>(`fairplay:markets:${fixtureId}`);
+    return h ? Object.values(h) : [];
+  } catch { return []; }
+}

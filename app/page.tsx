@@ -87,8 +87,12 @@ export default function Home() {
               const ko = new Date(f.startTime).toLocaleString("en-GB", { weekday: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" });
               return (
                 <div className="mkfix" key={f.fixtureId}>
-                  <div className="mkhead"><div>{f.home} v {f.away}</div><span>KO {ko}</span></div>
-                  <div className="mkrow">
+                  <div className="mkhead"><div>{f.home} v {f.away}</div><span>{f.showcase ? "FINAL · FT · fair odds pre-KO" : `KO ${ko}`}</span></div>
+                  {(!f.oneX2.home && !f.oneX2.draw && !f.oneX2.away && !f.goals.some((g: any) => g.over || g.under) && !f.handicap.some((h: any) => h.home || h.away)) ? (
+                  <div className="mkrow"><span className="mklabel" style={{ width: "auto", color: "var(--faint)" }}>FAIR PRICES OPEN NEARER KICK-OFF</span></div>
+                ) : (
+                <>
+                <div className="mkrow">
                     <span className="mklabel">RESULT</span>
                     {f.oneX2.home && <Link href="/xray" className="mkpx" style={{ textDecoration: "none" }}><small>{flag(f.home)}</small>{f.oneX2.home.toFixed(2)}</Link>}
                     {f.oneX2.draw && <Link href="/xray" className="mkpx" style={{ textDecoration: "none" }}><small>X</small>{f.oneX2.draw.toFixed(2)}</Link>}
@@ -108,6 +112,8 @@ export default function Home() {
                       {h.away && <Link href="/xray" className="mkpx" style={{ textDecoration: "none" }}><small>{flag(f.away)}</small>{h.away.toFixed(2)}</Link>}
                     </div>
                   ))}
+                </>
+                )}
                 </div>
               );
             })}

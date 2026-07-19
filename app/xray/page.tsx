@@ -367,7 +367,7 @@ export default function Page() {
             const ko = new Date(f.startTime).toLocaleString("en-GB", { weekday: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" });
             return (
               <div className="mkfix" key={f.fixtureId}>
-                <div className="mkhead"><div>{f.home} v {f.away}</div><span>KO {ko}</span></div>
+                <div className="mkhead"><div>{f.home} v {f.away}</div><span>{f.showcase ? "FINAL · FT · fair odds pre-KO" : `KO ${ko}`}</span></div>
                 <div className="mkrow">
                   <span className="mklabel">RESULT</span>
                   {f.oneX2.home && <button className="mkpx" onClick={() => addLeg(f.fixtureId, "home_win", undefined, `${f.home} to beat ${f.away}`, f.oneX2.home)}><small>{flag(f.home)}</small>{f.oneX2.home.toFixed(2)}</button>}
