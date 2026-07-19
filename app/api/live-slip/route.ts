@@ -23,7 +23,7 @@ export async function GET() {
         key: `${f.fixtureId}-${key}`, fixtureId: String(f.fixtureId), marketId, line,
         label, sub: `LIVE · ${f.home} v ${f.away} · KO ${ko} · fair ${fair.toFixed(2)}`,
         fairPrice: fair, bookiePrice: Number((fair * haircut).toFixed(2)),
-        proofRef: `tx:${ts}`, matched: true,
+        proofRef: `tx:${ts}`, matched: true, ko: f.startTime,
       });
 
     // Leg A: match result favourite, else handicap, else nothing

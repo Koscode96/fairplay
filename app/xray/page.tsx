@@ -20,7 +20,7 @@ const DEMO_SLIP: SlipLeg[] = [
 
 export default function Page() {
   const [step, setStep] = useState(0);
-  const [slip, setSlip] = useState<SlipLeg[]>(DEMO_SLIP);
+  const [slip, setSlip] = useState<SlipLeg[]>([]);
   const [accaOverride, setAccaOverride] = useState<number | null>(null);
   const [splash, setSplash] = useState(true);
   const [anchor, setAnchor] = useState<{ sig?: string; error?: string; busy?: boolean } | null>(null);
@@ -44,7 +44,7 @@ export default function Page() {
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (d?.live && d.legs?.length) {
-          setSlip(d.legs.map((l: any) => ({ ...l, fairPrice: l.fairPrice ?? 0 })));
+          setSlip(d.legs.map((l: any) => ({ ...l, bookiePrice: l.fairPrice ?? l.bookiePrice, fairPrice: l.fairPrice ?? 0 })));
           setAccaOverride(null);
         }
       })
@@ -72,7 +72,8 @@ export default function Page() {
     () => (matchedLegs.length ? xray(matchedLegs, accaPrice, stake) : null),
     [matchedLegs, accaPrice, stake]
   );
-  const worst = r ? matchedLegs[r.worstLegIndex] : null;
+  const [chosen, setChosen] = useState(0);
+  const worst = matchedLegs.length ? matchedLegs[Math.min(chosen, matchedLegs.length - 1)] : null;
   const settled = "won";
   const events = [
     { min: 34, type: "yellow", detail: "Yellow · De Paul (ARG)" },
@@ -87,9 +88,9 @@ export default function Page() {
       if (s.some((l) => `${l.fixtureId}:${l.marketId}:${(l as any).line ?? ""}` === key)) return s;
       const cleaned = s.filter((l) => l.matched);
       return [...cleaned, {
-        fixtureId, marketId, line, label,
+        fixtureId, marketId, line, label, ko: (board?.find((f: any) => f.fixtureId === fixtureId)?.startTime) ?? null,
         sub: `LIVE · fair ${fair.toFixed(2)} · from market board`,
-        bookiePrice: Number((fair * 0.94).toFixed(2)), fairPrice: fair,
+        bookiePrice: fair, fairPrice: fair,
         proofRef: "tx:board", matched: true,
       } as any];
     });
@@ -131,7 +132,7 @@ export default function Page() {
         label: l.selection || `${l.homeTeam} v ${l.awayTeam}`,
         sub: l.matched
           ? `${l.homeTeam} v ${l.awayTeam} · fair ${Number(l.fairPrice).toFixed(2)}`
-          : "Not priced by StablePrice (active: match result, goal totals, handicaps) · excluded",
+          : "No fair price available for this market yet",
         bookiePrice: l.bookiePrice ?? 2,
         fairPrice: l.fairPrice ?? 0,
         proofRef: l.proofRef ?? undefined,
@@ -159,14 +160,14 @@ export default function Page() {
               <span key={i} className="l" style={{ animationDelay: `${i * 0.05}s`, color: i > 3 ? "var(--margin)" : undefined }}>{c}</span>
             ))}
             <span className="sweep" />
-            <span className="tag">P2P FAIR ODDS · TxODDS · SOLANA</span>
+            <span className="tag">BET ANYONE · FAIR ODDS · NO BOOKIE</span>
           </div>
         </div>
       )}
       <div className="brand">
         <h1><a href="/" style={{ color: "inherit", textDecoration: "none" }}>FAIR<b>PLAY</b></a></h1>
         <div className="net">
-          <a href="/" style={{ color: "var(--dim)", textDecoration: "none" }}>OPEN BETS</a>{" · "}{live.configured ? `TxLINE LIVE · ${live.network?.toUpperCase()}` : "DEMO"}
+          <a href="/" style={{ color: "var(--dim)", textDecoration: "none" }}>OPEN BETS</a>{" · "}{live.configured ? "LIVE ODDS · VERIFIED" : "DEMO MODE"}
           {" · "}
           <a href="#" onClick={(e) => { e.preventDefault(); connectPhantom().then(setWallet); }}
              style={{ color: wallet ? "var(--won)" : "var(--dim)", textDecoration: "none" }}>
@@ -178,137 +179,97 @@ export default function Page() {
       <div className="layout">
       <div>
       <div className="steps">
-        {["1 · SLIP", "2 · X-RAY", "3 · FAIR BET"].map((t, i) => (
-          <button key={t} className={step === i ? "on" : ""} onClick={() => (i === 1 ? runScan() : setStep(i))}>{t}</button>
+        {["1 · PICK MARKETS", "2 · TERMS & POST"].map((t, i) => (
+          <button key={t} className={step === (i === 1 ? 2 : 0) ? "on" : ""} onClick={() => setStep(i === 1 ? 2 : 0)}>{t}</button>
         ))}
       </div>
 
       {step === 0 && (
         <section>
           <p className="eyebrow">{slip[0]?.sub?.startsWith("LIVE") ? "Step 1 · Your bet · live World Cup markets" : "Step 1 · Your bet"}</p>
-          <p className="foot" style={{ textAlign: "left", margin: "0 2px 12px", color: "var(--dim)" }}>
-            Bookies bake hidden margin into every price. Build a slip below or scan yours · we&rsquo;ll show what you&rsquo;re really paying.
-          </p>
+          
           {scanMsg && <p className="foot" style={{ marginTop: 0, marginBottom: 12 }}>{scanMsg}</p>}
           {slipLoading && (
             <div className="card" style={{ textAlign: "center", padding: "34px 16px" }}>
               <span style={{ fontFamily: "var(--mono)", fontSize: 11, letterSpacing: ".14em", color: "var(--margin)" }}>
-                CONNECTING TO TXLINE FEED…
+                LOADING LIVE ODDS…
               </span>
             </div>
           )}
-          {!slipLoading && <div className="card">
+          {!slipLoading && slip.length === 0 && (
+            <div className="card" style={{ textAlign: "center", padding: "30px 16px" }}>
+              <span style={{ fontFamily: "var(--mono)", fontSize: 11, letterSpacing: ".1em", color: "var(--dim)" }}>
+                EMPTY SLIP · TAP A PRICE ON THE LIVE BOARD →
+              </span>
+            </div>
+          )}
+          {!slipLoading && slip.length > 0 && <div className="card">
             {slip.map((l, i) => (
               <div className={`leg ${l.matched ? "" : "unmatched"}`} key={`${l.label}-${i}`}>
                 <div className="m">{l.label}<span>{l.sub}</span></div>
-                <input className="num" type="number" step="0.01" value={l.bookiePrice}
-                  disabled={!l.matched}
-                  onChange={(e) =>
-                    setSlip(slip.map((s, j) => (j === i ? { ...s, bookiePrice: +e.target.value || s.bookiePrice } : s)))
-                  } />
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span className="num" style={{ fontFamily: "var(--mono)", fontSize: 14 }}>{l.fairPrice.toFixed(2)}</span>
+                  <button className="mkpx" style={{ padding: "4px 8px" }} title="Remove"
+                    onClick={() => setSlip(slip.filter((_, j) => j !== i))}>×</button>
+                </div>
               </div>
             ))}
-            <div className="totrow">
-              <label>Bookie&rsquo;s acca price
-                <button className={`autochip ${accaOverride === null ? "on" : ""}`}
-                  onClick={() => setAccaOverride(null)}
-                  title="Auto = product of the legs above">
-                  {accaOverride === null ? "AUTO ✓" : "RESET TO AUTO"}
-                </button>
-              </label>
-              <input className="num" type="number" step="0.01" value={accaPrice}
-                onChange={(e) => setAccaOverride(+e.target.value || null)} /></div>
-            <div className="totrow"><label>Stake (£)</label>
-              <input className="num" type="number" step="1" value={stake} onChange={(e) => setStake(+e.target.value || stake)} /></div>
-            <button className="go" onClick={runScan} disabled={!r}>RUN X-RAY →</button>
+            
+
+            <button className="go" onClick={() => matchedLegs.length && setStep(2)} disabled={!matchedLegs.length}>CHOOSE MARKET & SET TERMS →</button>
           </div>}
-          <p className="foot">Tap prices on the live board to build your bet.<br />Fair prices from TxLINE StablePrice consensus.</p>
+          <p className="foot">Challenges post to the open board at the fair price.<br />Fair odds verified by TxODDS.</p>
         </section>
       )}
 
-      {step === 1 && r && (
-        <section>
-          <div className="card verdict">
-            <p className="eyebrow" style={{ marginLeft: 0 }}>Margin X-ray</p>
-            <div className="big">{r.accaMarginPct.toFixed(1)}<small>%</small></div>
-            <p>is what this acca charges you above the verified fair price.<br />
-              <b>£{stake.toFixed(0)} staked → expected value −£{Math.abs(r.expectedValueAbs).toFixed(2)}.</b></p>
-            <div className="kv">
-              <div><div className="k">Their price</div><div className="v">{r.accaBookiePrice.toFixed(2)}</div></div>
-              <div><div className="k">Fair price</div><div className="v">{r.accaFairPrice.toFixed(2)}</div></div>
-              <div><div className="k">EV / £{stake.toFixed(0)}</div><div className="v neg">−£{Math.abs(r.expectedValueAbs).toFixed(2)}</div></div>
-            </div>
-          </div>
-          <p className="eyebrow">Per-leg scan</p>
-          <div className="card">
-            {r.legs.map((l, i) => {
-              const fairW = l.fairProb * 100;
-              const skimW = (l.bookieImpliedProb - l.fairProb) * 100;
-              return (
-                <div className="scanleg" key={`${l.label}-${i}`}>
-                  <div className="top">
-                    <div className={`lbl ${i === r.worstLegIndex ? "worst" : ""}`}>{l.label}{i === r.worstLegIndex ? " ← worst leg" : ""}</div>
-                    <div className="pm">+{l.marginPct.toFixed(1)}%</div>
-                  </div>
-                  <div className="bar">
-                    <div className="fair" style={{ width: scanOn ? `${fairW}%` : 0 }} />
-                    <div className="skim" style={{ left: `${fairW}%`, width: scanOn ? `${Math.max(skimW, 0)}%` : 0 }} />
-                  </div>
-                  <div className="sub"><span>theirs {l.bookiePrice.toFixed(2)} · fair {l.fairPrice.toFixed(2)}</span>
-                    <a href="#" onClick={(e) => e.preventDefault()}>{l.proofRef ?? "proof"} ↗</a></div>
-                </div>
-              );
-            })}
-          </div>
-          <div className="legend">
-            <span><span className="sw" style={{ background: "#2E4160" }} />FAIR PRICE</span>
-            <span><span className="sw" style={{ background: "repeating-linear-gradient(-55deg,var(--margin) 0 3px,transparent 3px 6px)" }} />MARGIN SKIMMED</span>
-          </div>
-          <div style={{ height: 16 }} />
-          <button className="cta" onClick={() => setStep(2)}>TAKE WORST LEG AT FAIR ODDS ON FAIRPLAY →</button>
-          <button className="go" style={{ marginTop: 10 }} onClick={async () => {
-            const t = `My acca: bookie ${r.accaBookiePrice.toFixed(2)} vs fair ${r.accaFairPrice.toFixed(2)}. Paying ${r.accaMarginPct.toFixed(1)}% margin, EV ${r.expectedValueAbs < 0 ? "-" : ""}£${Math.abs(r.expectedValueAbs).toFixed(2)} on £${stake}. X-rayed on Fairline.`;
-            const res = await shareText(t, window.location.origin);
-            setShared(res === "copied" ? "COPIED TO CLIPBOARD ✓" : res ? "SHARED ✓" : null);
-            setTimeout(() => setShared(null), 2200);
-          }}>{shared ?? "SHARE MY X-RAY"}</button>
-          <p className="foot">Every fair price carries an on-chain timestamp proof.<br />Solana-anchored via TxLINE Merkle attestation.</p>
-        </section>
-      )}
+      
 
       {step === 2 && worst && (
         <section>
-          <p className="eyebrow">Your challenge · live on the board once signed</p>
+          <p className="eyebrow">Choose your market, set your stake, sign to post</p>
+          {matchedLegs.length > 1 && (
+            <div className="mkrow" style={{ marginBottom: 10, flexWrap: "wrap" }}>
+              {matchedLegs.map((l, i) => (
+                <button key={i} className="mkpx" style={i === Math.min(chosen, matchedLegs.length - 1) ? { borderColor: "var(--margin)", color: "var(--margin)" } : {}}
+                  onClick={() => setChosen(i)}>{l.label.slice(0, 26)} · {l.fairPrice.toFixed(2)}</button>
+              ))}
+            </div>
+          )}
           <div className="card chal">
             <div className="row"><span className="k">Market</span><span className="v">{worst.label.split("·").pop()?.trim()}</span></div>
-            <div className="row"><span className="k">Your price (fair)</span><span className="v">{worst.fairPrice.toFixed(2)}</span></div>
-            <div className="row"><span className="k">Bookie wanted</span><span className="v" style={{ color: "var(--faint)", textDecoration: "line-through" }}>{worst.bookiePrice.toFixed(2)}</span></div>
-            <div className="row"><span className="k">Stake</span><span className="v">£10.00</span></div>
-            <div className="row"><span className="k">Settlement</span><span className="v" style={{ fontSize: 11 }}>TxLINE verified · auto</span></div>
+            <div className="row"><span className="k">Fair price</span><span className="v">{worst.fairPrice.toFixed(2)}</span></div>
+                        <div className="totrow" style={{ padding: "9px 0", borderBottom: "1px solid var(--line)" }}>
+              <label>Your stake (£)</label>
+              <input className="num" type="number" min={1} step={1} value={stake}
+                onChange={(e) => setStake(Math.max(1, +e.target.value || 1))} style={{ width: 90 }} />
+            </div>
+            <div className="row"><span className="k">You win</span><span className="v">£{(stake * (worst.fairPrice - 1)).toFixed(2)}</span></div>
+            <div className="row"><span className="k">Takers fill</span><span className="v">from £1 · up to £{(stake * (worst.fairPrice - 1)).toFixed(2)}</span></div>
+            <div className="row"><span className="k">Settlement</span><span className="v" style={{ fontSize: 11 }}>Automatic · official result</span></div>
             <div className="row"><span className="k">Status</span>
               <span className={`pill ${betSig ? "won" : "open"}`}>{betSig ? "LIVE ON FAIRPLAY · AWAITING TAKER" : "AWAITING YOUR SIGNATURE"}</span></div>
             {!betSig && (
               <button className="go" style={{ marginTop: 12 }} onClick={async () => {
                 let w = wallet;
                 if (!w) { w = await connectPhantom(); setWallet(w); if (!w) return; }
-                const terms = { app: "fairplay", v: 1, market: worst.marketId, fixture: worst.fixtureId, price: worst.fairPrice, stake: 10, side: "for", ts: Date.now() };
+                const terms = { app: "fairplay", v: 1, market: worst.marketId, fixture: worst.fixtureId, price: worst.fairPrice, stake, side: "for", ts: Date.now() };
                 const sig = await signBetCommitment(terms);
                 if (sig && w) {
                   setBetSig(sig);
                   const d = encodeBet({
                     v: 1, fixtureId: worst.fixtureId, marketId: worst.marketId,
                     line: (worst as any).line, label: worst.label, fairPrice: worst.fairPrice,
-                    stake: 10, creator: w, creatorSig: sig, side: "for", ts: terms.ts,
+                    stake, creator: w, creatorSig: sig, side: "for", ts: terms.ts,
                   });
                   setShareLink(`${window.location.origin}/bet?d=${d}`);
                   fetch("/api/bets", { method: "POST", headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ d, label: worst.label, fairPrice: worst.fairPrice, stake: 10, creator: w }) }).catch(() => {});
+                    body: JSON.stringify({ d, label: worst.label, fairPrice: worst.fairPrice, stake, creator: w, ko: (worst as any).ko ?? null }) }).catch(() => {});
                 }
               }}>
                 {wallet ? "SIGN CHALLENGE WITH PHANTOM" : "CONNECT PHANTOM TO SIGN"}
               </button>
             )}
-            {betSig && <div className="proofbox" style={{ marginTop: 12 }}><b>WALLET COMMITMENT</b><br />sig: {betSig.slice(0, 44)}…</div>}
+            {betSig && <div className="proofbox" style={{ marginTop: 12 }}><b>SIGNED WITH YOUR WALLET ✓</b></div>}
             {shareLink && (
               <button className="go" style={{ marginTop: 10 }}
                 onClick={() => { navigator.clipboard.writeText(shareLink); setCopied(true); setTimeout(() => setCopied(false), 2000); }}>
@@ -333,16 +294,16 @@ export default function Page() {
                   });
                   setAnchor(res as any);
                 }}>
-                {anchor?.busy ? "ANCHORING…" : "ANCHOR BET ON SOLANA DEVNET →"}
+                {anchor?.busy ? "RECORDING…" : "RECORD BET ON-CHAIN →"}
               </button>
             )}
             {anchor?.error && <p className="foot" style={{ color: "var(--lost)", marginTop: 8 }}>{anchor.error}</p>}
             {anchor?.sig && (
               <div className="proofbox" style={{ marginTop: 10 }}>
-                <b>ON-CHAIN · DEVNET</b><br />
+                <b>RECORDED ON-CHAIN ✓</b><br />
                 tx: {anchor.sig.slice(0, 40)}…<br />
                 <a href={`https://explorer.solana.com/tx/${anchor.sig}?cluster=devnet`} target="_blank" rel="noreferrer"
-                   style={{ color: "var(--won)" }}>view on Solana Explorer ↗</a>
+                   style={{ color: "var(--won)" }}>view proof ↗</a>
               </div>
             )}
           </div>
@@ -412,7 +373,7 @@ export default function Page() {
               </div>
             );
           })}
-          <p className="mknote">StablePrice de-margined consensus · devnet<br />Priced: match result · goal totals · handicaps<br />Not priced: BTTS · corners · cards</p>
+          <p className="mknote">Fair odds by TxODDS<br />Match result · total goals · handicaps<br />More markets coming</p>
         </div>
       </div>
       </div>

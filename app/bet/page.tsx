@@ -60,10 +60,10 @@ function BetInner() {
         </div>
       </div>
 
-      <p className="eyebrow">Open challenge · verified fair price</p>
+      <p className="eyebrow">Open bet · fair odds</p>
       <div className="card chal">
         <div className="row"><span className="k">Market</span><span className="v">{bet.label}</span></div>
-        <div className="row"><span className="k">Fair price (TxLINE)</span><span className="v">{bet.fairPrice.toFixed(2)}</span></div>
+        <div className="row"><span className="k">Fair price</span><span className="v">{bet.fairPrice.toFixed(2)}</span></div>
         <div className="row"><span className="k">Challenger backs</span><span className="v">YES · {shortKey(bet.creator)}</span></div>
         <div className="row"><span className="k">You take</span><span className="v">The other side · from £1</span></div>
         {feedBet && (
@@ -75,7 +75,10 @@ function BetInner() {
         <div className="row"><span className="k">Settlement</span><span className="v" style={{ fontSize: 11 }}>TxLINE verified · automatic</span></div>
         <div className="row"><span className="k">Status</span>
           <span className={`pill ${acceptSig ? "won" : "open"}`}>{acceptSig ? `MATCHED £${(myFill ?? 0).toFixed(0)} · SIGNED` : "OPEN"}</span></div>
-        {!acceptSig && (
+        {feedBet?.closed && !acceptSig && (
+          <p className="foot" style={{ marginTop: 10 }}>IN PLAY · CLOSED TO NEW TAKERS</p>
+        )}
+        {!acceptSig && !feedBet?.closed && (
           <>
             <div className="totrow" style={{ marginTop: 6 }}>
               <label>Your stake (£){feedBet ? ` · max ${feedBet.remaining}` : ""}</label>
@@ -109,14 +112,14 @@ function BetInner() {
               const res = await anchorOnDevnet({ app: "fairline", accept: bet.creatorSig.slice(0, 24), fixture: bet.fixtureId, market: bet.marketId });
               setAnchor(res as any);
             }}>
-            {anchor?.busy ? "ANCHORING…" : "ANCHOR ACCEPTANCE ON DEVNET →"}
+            {anchor?.busy ? "RECORDING…" : "RECORD MY SIDE ON-CHAIN →"}
           </button>
         )}
         {anchor?.error && <p className="foot" style={{ color: "var(--lost)", marginTop: 8 }}>{anchor.error}</p>}
         {anchor?.sig && (
           <div className="proofbox" style={{ marginTop: 10 }}>
-            <b>ON-CHAIN · DEVNET</b><br />
-            <a href={`https://explorer.solana.com/tx/${anchor.sig}?cluster=devnet`} target="_blank" rel="noreferrer" style={{ color: "var(--won)" }}>view on Solana Explorer ↗</a>
+            <b>RECORDED ON-CHAIN ✓</b><br />
+            <a href={`https://explorer.solana.com/tx/${anchor.sig}?cluster=devnet`} target="_blank" rel="noreferrer" style={{ color: "var(--won)" }}>view proof ↗</a>
           </div>
         )}
       </div>
@@ -134,16 +137,16 @@ function BetInner() {
       )}
       {acceptSig && (
         <>
-          <p className="eyebrow" style={{ marginTop: 20 }}>Settlement · live from TxLINE</p>
+          <p className="eyebrow" style={{ marginTop: 20 }}>Result</p>
           <div className="card">
             <button className="go" onClick={checkSettlement} disabled={checking}>
-              {checking ? "CHECKING VERIFIED RESULT…" : "CHECK SETTLEMENT →"}
+              {checking ? "CHECKING THE RESULT…" : "CHECK RESULT →"}
             </button>
             {result && (
               <div className="proofbox" style={{ marginTop: 12 }}>
                 <b>OUTCOME: {String(result.outcome).toUpperCase()}{result.finalised === false && result.outcome === "pending" ? " (match not finalised)" : ""}</b><br />
                 {result.score && <>score : {result.score.home}-{result.score.away}<br /></>}
-                {result.seq != null && <>seq&nbsp;&nbsp;&nbsp;: {result.seq} · proof {result.proof}<br /></>}
+                
                 {result.outcome !== "pending" && (
                   <>ruling : challenger {won ? "WINS" : result.outcome === "void" ? "· VOID, stakes returned" : "LOSES · you win"}</>
                 )}
@@ -152,7 +155,7 @@ function BetInner() {
           </div>
         </>
       )}
-      <p className="foot">Both wallets sign. Solana records it.<br />TxODDS verified data settles it. No bookmaker.</p>
+      <p className="foot">Both sides sign. The result decides.<br />No bookmaker. No arguing.</p>
     </div>
   );
 }

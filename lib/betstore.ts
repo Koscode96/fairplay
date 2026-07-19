@@ -1,37 +1,60 @@
 /**
- * Persistent bet book. Upstash Redis when configured (KV_REST_API_URL /
- * UPSTASH_REDIS_REST_URL), in-memory fallback otherwise. Bets in a hash
- * keyed by their encoded payload `d`.
+ * Persistent bet book on Railway Postgres (DATABASE_URL).
+ * Falls back to in-memory when DATABASE_URL is absent, so the app
+ * always works. Table auto-creates on first use.
  */
-import { Redis } from "@upstash/redis";
+import { Pool } from "pg";
 
 export type Fill = { taker: string; amount: number; sig: string; ts: number };
 export type OpenBet = {
   d: string; label: string; fairPrice: number; stake: number;
-  creator: string; ts: number; fills: Fill[];
+  creator: string; ts: number; fills: Fill[]; ko?: number | null;
 };
 
-const url = process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL;
-const token = process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_REDIS_REST_TOKEN;
-const redis = url && token ? new Redis({ url, token }) : null;
-const HASH = "fairplay:bets";
+const url = process.env.DATABASE_URL;
+const pool: Pool | null = url
+  ? ((globalThis as any).__flPool ?? ((globalThis as any).__flPool = new Pool({
+      connectionString: url,
+      ssl: url.includes("railway") || url.includes("rlwy") ? { rejectUnauthorized: false } : undefined,
+      max: 3,
+    })))
+  : null;
 
 const mem: Map<string, OpenBet> = (globalThis as any).__flBets2 ?? ((globalThis as any).__flBets2 = new Map());
+export const persistent = Boolean(pool);
 
-export const persistent = Boolean(redis);
+let ready: Promise<void> | null = null;
+const init = () => {
+  if (!pool) return Promise.resolve();
+  if (!ready) {
+    ready = pool.query(`CREATE TABLE IF NOT EXISTS fairplay_bets (
+      d TEXT PRIMARY KEY,
+      data JSONB NOT NULL,
+      ts BIGINT NOT NULL
+    )`).then(() => undefined);
+  }
+  return ready;
+};
 
 export async function allBets(): Promise<OpenBet[]> {
-  if (!redis) return [...mem.values()];
-  const h = await redis.hgetall<Record<string, OpenBet>>(HASH);
-  return h ? Object.values(h) : [];
+  if (!pool) return [...mem.values()];
+  await init();
+  const r = await pool.query("SELECT data FROM fairplay_bets ORDER BY ts DESC LIMIT 50");
+  return r.rows.map((row) => row.data as OpenBet);
 }
 
 export async function getBet(d: string): Promise<OpenBet | null> {
-  if (!redis) return mem.get(d) ?? null;
-  return (await redis.hget<OpenBet>(HASH, d)) ?? null;
+  if (!pool) return mem.get(d) ?? null;
+  await init();
+  const r = await pool.query("SELECT data FROM fairplay_bets WHERE d = $1", [d]);
+  return r.rows[0]?.data ?? null;
 }
 
 export async function putBet(b: OpenBet): Promise<void> {
-  if (!redis) { mem.set(b.d, b); return; }
-  await redis.hset(HASH, { [b.d]: b });
+  if (!pool) { mem.set(b.d, b); return; }
+  await init();
+  await pool.query(
+    "INSERT INTO fairplay_bets (d, data, ts) VALUES ($1, $2, $3) ON CONFLICT (d) DO UPDATE SET data = $2",
+    [b.d, JSON.stringify(b), b.ts]
+  );
 }

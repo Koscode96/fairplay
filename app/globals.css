@@ -2,8 +2,8 @@
     --ink:#0A1322; --panel:#101B2E; --panel2:#152238; --line:#20324D;
     --text:#FFFFFF; --dim:#9AABC0; --faint:#5E7189;
     --margin:#F0836E; --won:#5BC98C; --lost:#E06A6A; --void:#8B98A5;
-    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
-    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    --mono:"Space Grotesk",ui-monospace,"SF Mono",Menlo,monospace;
+    --sans:"Plus Jakarta Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   body{background:var(--ink);color:var(--text);font-family:var(--sans);-webkit-font-smoothing:antialiased;min-height:100vh}
@@ -130,3 +130,11 @@
   .tile:hover{border-color:var(--margin)}
   .tile-t{display:block;font-family:var(--mono);font-size:13px;letter-spacing:.12em;color:var(--margin);font-weight:600}
   .tile-d{display:block;color:var(--dim);font-size:12.5px;margin-top:5px;line-height:1.5}
+
+  @keyframes logoBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-2.5px)}}
+  .brand h1{animation:logoBob 3.4s ease-in-out infinite}
+  .brand h1:hover{animation-duration:1.4s}
+  .go,.cta{font-family:var(--sans);font-weight:700;letter-spacing:.06em}
+  .hero h2{font-weight:800}
+  .tile-t{font-family:var(--sans);font-weight:800;letter-spacing:.08em}
+  @media (prefers-reduced-motion: reduce){ .brand h1{animation:none} }

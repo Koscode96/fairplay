@@ -25,7 +25,12 @@ export interface LiveMarket {
 }
 
 // Devnet odds snapshots return a rolling window of recent messages, not the
-// full book — so we accumulate markets across calls in a warm-instance cache.
+// full book. We accumulate markets across calls: Redis when configured
+// (survives instances and time), in-memory fallback otherwise.
+import { Redis } from "@upstash/redis";
+const rUrl = process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL;
+const rTok = process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_REDIS_REST_TOKEN;
+const mredis = rUrl && rTok ? new Redis({ url: rUrl, token: rTok }) : null;
 const marketCache = new Map<number, Map<string, LiveMarket>>();
 
 const configured = () =>
@@ -85,17 +90,29 @@ function parseOdds(fixtureId: number, data: any[]): LiveMarket[] {
 export async function liveMarkets(fixtureId: number): Promise<LiveMarket[]> {
   if (!marketCache.has(fixtureId)) marketCache.set(fixtureId, new Map());
   const cache = marketCache.get(fixtureId)!;
-  // Pull several snapshot windows and merge — book accumulates across calls
+  const rkey = `fairplay:markets:${fixtureId}`;
+  // Seed from Redis: every line ever seen for this fixture
+  if (mredis && cache.size === 0) {
+    try {
+      const h = await mredis.hgetall<Record<string, LiveMarket>>(rkey);
+      if (h) for (const [k, m] of Object.entries(h)) cache.set(k, m);
+    } catch {}
+  }
+  // Pull fresh snapshot windows and merge
+  const fresh: Record<string, LiveMarket> = {};
   for (let i = 0; i < 3; i++) {
     const data = await tx(`odds/snapshot/${fixtureId}`);
     if (Array.isArray(data)) {
       for (const m of parseOdds(fixtureId, data)) {
         const k = `${m.marketId}:${m.line ?? ""}`;
         const prev = cache.get(k);
-        if (!prev || m.ts > prev.ts) cache.set(k, m);
+        if (!prev || m.ts > prev.ts) { cache.set(k, m); fresh[k] = m; }
       }
     }
     if (i < 2) await new Promise((r) => setTimeout(r, 350));
+  }
+  if (mredis && Object.keys(fresh).length) {
+    try { await mredis.hset(rkey, fresh); } catch {}
   }
   return [...cache.values()];
 }
@@ -104,8 +121,8 @@ export async function liveBoard() {
   const fixtures = await liveFixtures();
   if (!fixtures) return null;
   const now = Date.now();
-  // upcoming = kicks off in the future (or last 2h), regardless of state-flag quirks
-  const upcoming = fixtures.filter((f) => f.startTime > now - 2 * 3600_000 && f.gameState !== 3);
+  // strictly upcoming: kickoff in the future, nothing started or played
+  const upcoming = fixtures.filter((f) => f.startTime > now && f.gameState !== 3);
   const markets: Record<number, LiveMarket[]> = {};
   for (const f of upcoming) markets[f.fixtureId] = await liveMarkets(f.fixtureId);
   return { fixtures, upcoming, markets };
