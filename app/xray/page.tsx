@@ -86,8 +86,6 @@ export default function Page() {
   ];
 
   const addLeg = (fixtureId: string, marketId: string, line: number | undefined, label: string, fair: number) => {
-    const fx = board?.find((f: any) => f.fixtureId === fixtureId);
-    if (fx?.showcase) return; // finished match: analysis reference only, no new challenges
     const key = `${fixtureId}:${marketId}:${line ?? ""}`;
     setSlip((s) => {
       if (s.some((l) => `${l.fixtureId}:${l.marketId}:${(l as any).line ?? ""}` === key)) return s;
