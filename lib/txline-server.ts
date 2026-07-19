@@ -51,8 +51,22 @@ async function tx(path: string): Promise<any | null> {
 
 export async function liveFixtures(): Promise<LiveFixture[] | null> {
   const epochDay = Math.floor(Date.now() / 86400000);
-  const data = await tx(`fixtures/snapshot?competitionId=72&startEpochDay=${epochDay - 4}`);
-  if (!Array.isArray(data)) return null;
+  // Free tier covers World Cup, International Friendlies, and EPL.
+  // Try unfiltered first (everything the subscription covers), then fall back
+  // to configured competition IDs (comma-separated), default World Cup.
+  let data = await tx(`fixtures/snapshot?startEpochDay=${epochDay - 1}`);
+  if (!Array.isArray(data) || data.length === 0) {
+    const ids = (process.env.TXLINE_COMPETITION_IDS ?? "72").split(",").map((x) => x.trim()).filter(Boolean);
+    const merged: any[] = [];
+    for (const id of ids) {
+      const d = await tx(`fixtures/snapshot?competitionId=${id}&startEpochDay=${epochDay - 1}`);
+      if (Array.isArray(d)) merged.push(...d);
+    }
+    data = merged;
+  }
+  if (!Array.isArray(data) || data.length === 0) return null;
+  const seen = new Set<number>();
+  data = data.filter((f: any) => (seen.has(f.FixtureId) ? false : (seen.add(f.FixtureId), true)));
   return data.map((f: any) => ({
     fixtureId: f.FixtureId,
     home: f.Participant1IsHome ? f.Participant1 : f.Participant2,
