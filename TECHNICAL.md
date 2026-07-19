@@ -1,47 +1,39 @@
 # FairPlay: Technical Documentation
 
-Peer-to-peer fair-odds exchange for the TxODDS World Cup Hackathon (Prediction Markets & Settlement track). Solo build. Companion to Fairline (Consumer track); shares the fair-odds engine, built separately for this track's settlement criteria.
+Peer-to-peer fair-odds exchange for the TxODDS World Cup Hackathon (Prediction Markets and Settlement track). Solo build. Companion to Fairline; shared fair-odds engine, built separately for this track's settlement criteria.
 
 ## What it does
-Users post challenges at TxLINE StablePrice fair odds from a live market board. Any number of takers fill the other side fractionally from £1. Markets close to new takers at kickoff. Outcomes settle automatically against TxLINE verified match data, with rule-based void on abandonment. Both sides sign with their own wallet and can record commitments on Solana.
+Challenges post at TxLINE StablePrice fair odds (singles or multi-leg combos), fill fractionally from £1 by any number of takers, close to new takers at kickoff (server-enforced), and settle deterministically against TxLINE verified match data with per-leg rulings and rule-based VOID.
 
 ## Stack
-- Next.js 15 (App Router), React 19, TypeScript. Vercel.
-- Upstash Redis (via Vercel Storage) for the persistent order book and accumulated market book.
-- TxLINE devnet subscription (service level 1, on-chain activation).
-- Solana devnet for wallet-signed commitment recording (Memo program).
+Next.js 15, React 19, TypeScript, Vercel. Upstash Redis for the persistent order book and the shared accumulated market book. TxLINE devnet (service level 1, on-chain activation). Solana devnet Memo for wallet-signed commitment recording.
 
 ## Architecture
 ```
-/                     open-bets board (order book with liquidity bars)
-/xray                 create flow: pick markets -> terms -> sign & post
-/bet?d=...            taker flow: fractional fill, result check
-/api/bets             order book API (GET list/one, POST create/fill)
-/api/settle-check     rules a market against live TxLINE scores
-/api/market-board     accumulated live markets per fixture
-/api/txline/[...path] credentialed proxy to TxLINE
-lib/
-  betstore.ts   Redis-backed book (in-memory fallback), bets keyed by payload
-  bet-codec.ts  bets are base64url-encoded in shareable links (no accounts)
-  markets.ts    market DSL + settlement incl. abandonment -> VOID
-  engine.ts     fair-price maths
+/            open-bets board + live fair panel (+ historical final showcase)
+/xray        create: shortlist from board -> combo/singles -> terms -> sign & post
+/bet?d=...   accept: fractional fill, takers ledger, result check
+/api/bets    order book (create / fill / list; KO cutoff on fills)
+/api/settle-check  rules one market against live TxLINE scores
+/api/market-board  accumulated book (+ showcase)
+lib/: betstore (Redis book), bet-codec (link-encoded bets incl. combo legs),
+      markets DSL (result/totals/handicaps, VOID on abandonment), engine, flags
 ```
 
 ## Bet lifecycle
-1. Create: user shortlists markets from the live board (prices are fair and read-only), picks one, sets stake. Payout preview: backer stakes S at odds O, wins S x (O-1).
-2. Sign: Phantom signs the full terms (market, fixture, price, stake, timestamp). The signed payload is encoded into the share link and posted to the order book with the fixture kickoff time.
-3. Fill (fractional): total taker liability = S x (O-1). Takers fill any amount from £1 up to remaining liability; each fill is wallet-signed with its amount inside the signature. Pro-rata: a taker filling amount A risks A and wins A/(O-1) if the bet fails.
-4. Cutoff: fills are rejected server-side once `now >= kickoff` (HTTP 409). The board shows the closing time and flips to closed.
-5. Settle: `/api/settle-check` pulls the live scores snapshot, extracts the finalised result (or latest in-play state), maps it into the market DSL and returns won/lost/pending, or void when the fixture is abandoned or postponed. Existing fills stand; void returns stakes.
+1. **Create.** Shortlist fair prices from the live board. Multi-leg posts as a COMBO by default at the combined price (legs multiplied, labelled as such) with a SINGLES toggle. Stake set on the terms ticket with payout and taker-liability maths.
+2. **Sign.** Phantom signs the full terms (market/legs, price, stake, timestamp). The payload is base64url-encoded into the share link and mirrored to the Redis book with the fixture kickoff.
+3. **Fill.** Total taker liability = S x (O - 1). Takers fill any amount from £1 up to remaining; each fill is wallet-signed with its amount inside the signature; pro-rata payouts; liquidity bars and a takers ledger render live. Fills after kickoff are rejected (HTTP 409).
+4. **Settle.** `/api/settle-check` maps finalised TxLINE scores into the market DSL. Combos rule per leg via parallel checks: any loss -> lost; any pending -> pending; a VOID leg drops out acca-style. Abandoned/postponed -> VOID, stakes returned. No human input anywhere.
 
-## Settlement data
-TxLINE scores carry per-team totals (goals, corners, cards) with game phase and finalisation actions. Predicates cover match result (two-stat comparison), totals (threshold) and handicaps (difference threshold). All ruling is deterministic from the feed; no human input.
-
-## Persistence
-Order book and accumulated market book live in Upstash Redis (`fairplay:bets` hash; `fairplay:markets:{fixtureId}` hashes), so bets, fills and the visible odds ladder survive deploys and cold starts. In-memory fallback keeps the app functional without credentials.
+## Data layer
+- **Order book** in Redis (`fairplay:bets` hash), enriched with liability/matched/remaining/closed on read.
+- **Market book** shared with Fairline (`fairplay:markets:{fixtureId}`), accumulated from rolling snapshot windows; survives deploys.
+- **Fixture discovery** competition-agnostic (free tier spans World Cup, International Friendlies, EPL); unpriced future fixtures display "fair prices open nearer kick-off".
+- **Historical showcase.** The final's pre-KO fair book renders labelled on the boards; posting on finished fixtures flows straight into settlement (challenges are closed at creation and rule via CHECK RESULT).
 
 ## Environment
-`TXLINE_API_ORIGIN`, `TXLINE_JWT`, `TXLINE_API_TOKEN`, `ANTHROPIC_API_KEY`, `KV_REST_API_URL`, `KV_REST_API_TOKEN`.
+`TXLINE_API_ORIGIN`, `TXLINE_JWT`, `TXLINE_API_TOKEN`, `ANTHROPIC_API_KEY`, `KV_REST_API_URL`, `KV_REST_API_TOKEN`, optional `TXLINE_COMPETITION_IDS`.
 
 ## Roadmap honesty
-Stakes are demo-denominated; funds do not move. The next layer is SPL escrow: deposits into a program vault at fill time, released by the same settlement ruling. Everything upstream of money movement (identity, terms, timing, cutoff, ruling) is verifiable today.
+Stakes are demo-denominated; funds do not move. Next layer: SPL escrow at fill time, released by the same deterministic ruling. Correlation-aware joint pricing for same-game combos is roadmap; today combined prices are labelled "legs multiplied". Everything upstream of money movement (identity, terms, price, timing, cutoff, ruling) is verifiable in the product now.
